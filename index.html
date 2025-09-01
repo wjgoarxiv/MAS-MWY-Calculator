@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HLS 기반 MAS &amp; MWY 계산기</title>
+  <!-- Preconnect for faster font and script loading -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <!-- Tailwind CSS for rapid, utility‑first styling -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
+  />
+  <!-- Pretendard Variable font for optimal Korean typography -->
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+  <!-- Chart.js library (UMD build) -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"
+    defer
+  ></script>
+  <!-- FileSaver.js for export functionality -->
+  <script 
+    src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"
+    defer
+  ></script>
+  <style>
+    /* Global variables */
+    :root {
+      --color-primary: #2563eb;
+      --color-primary-dark: #1d4ed8;
+      --color-secondary: #059669;
+      --color-secondary-dark: #047857;
+      --color-accent: #dc2626;
+      --color-accent-dark: #b91c1c;
+      --color-background: #f5f7fa;
+      --color-card: rgba(255, 255, 255, 0.8);
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      --transition-normal: all 0.3s ease;
+    }
+    
+    /* Global body styles */
+    body {
+      font-family: "Pretendard Variable", -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+      background: linear-gradient(135deg, #f5f7fa 0%, #e4e9f3 100%);
+      color: #333;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      letter-spacing: -0.01em;
+      line-height: 1.6;
+    }
+    
+    /* Header with decorative background */
+    .header {
+      background-image: url("./assets/hydrate_abstract.png");
+      background-size: cover;
+      background-position: center;
+      color: white;
+      position: relative;
+    }
+    
+    /* Dark overlay on header for better legibility */
+    .header-overlay {
+      backdrop-filter: brightness(0.4);
+      padding: 2rem;
+      border-radius: 0.5rem;
+    }
+    
+    /* Card styles with glassmorphism */
+    .glass-card {
+      background-color: var(--color-card);
+      backdrop-filter: blur(10px);
+      border-radius: 1rem;
+      box-shadow: var(--shadow-md);
+      transition: var(--transition-normal);
+    }
+    
+    .glass-card:hover {
+      transform: translateY(-5px);
+      box-shadow: var(--shadow-lg);
+    }
+    
+    /* Button styles */
+    .btn {
+      transition: var(--transition-normal);
+      font-weight: 500;
+    }
+    
+    .btn-primary {
+      background-color: var(--color-primary);
+    }
+    
+    .btn-primary:hover {
+      background-color: var(--color-primary-dark);
+    }
+    
+    .btn-secondary {
+      background-color: var(--color-secondary);
+    }
+    
+    .btn-secondary:hover {
+      background-color: var(--color-secondary-dark);
+    }
+    
+    /* Square responsive chart wrapper */
+    .square-wrap {
+      position: relative;
+      width: 100%;
+    }
+    
+    .square-wrap::before {
+      content: "";
+      display: block;
+      padding-top: 56%;
+    }
+    /* On very small screens keep squares to avoid crowding */
+    @media (max-width: 640px) {
+      .square-wrap::before { padding-top: 100%; }
+    }
+    
+    .square-inner {
+      position: absolute;
+      inset: 0;
+    }
+    
+    /* Tabs styling */
+    .tab-button {
+      border-bottom: 2px solid transparent;
+      transition: var(--transition-normal);
+      font-weight: 500;
+    }
+    
+    .tab-button.active {
+      border-bottom-color: var(--color-primary);
+      color: var(--color-primary);
+    }
+    
+    /* Mobile optimizations */
+    @media (max-width: 640px) {
+      .header-overlay {
+        padding: 1.5rem;
+      }
+      
+      h1 {
+        font-size: 1.75rem !important;
+      }
+      
+      h2 {
+        font-size: 1.5rem !important;
+      }
+      
+      .glass-card {
+        padding: 1rem !important;
+      }
+      
+      .btn {
+        padding: 0.5rem 0.75rem !important;
+        font-size: 0.875rem !important;
+      }
+    }
+    
+    /* Disable Chart.js animation for precise tooltip */
+    canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+    
+    /* New tooltip styles */
+    .custom-tooltip {
+      position: relative;
+      display: inline-block;
+    }
+    
+    .custom-tooltip .tooltip-text {
+      visibility: hidden;
+      width: 200px;
+      background-color: #333;
+      color: #fff;
+      text-align: center;
+      border-radius: 6px;
+      padding: 8px;
+      position: absolute;
+      z-index: 1;
+      bottom: 125%;
+      left: 50%;
+      transform: translateX(-50%);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    
+    .custom-tooltip:hover .tooltip-text {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    /* Shortcuts modal overlay and glassmorphism panel */
+    #shortcutModal { background: rgba(17, 24, 39, 0.55); backdrop-filter: blur(10px); }
+    .glass-modal {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(8px) saturate(150%);
+      -webkit-backdrop-filter: blur(8px) saturate(150%);
+      border: 1px solid rgba(209, 213, 219, 0.6); /* gray-300 */
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      color: #111827; /* slate-900 */
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-overlay max-w-4xl mx-auto text-center">
+      <h1 class="text-4xl md:text-5xl font-bold mb-2">
+        하이드레이트 기반 염 농도 &amp; 수율 계산기
+      </h1>
+      <p class="text-lg md:text-xl">
+        Hu–Lee–Sum 상관식으로 최대 염도(MAS)와 최대 물 전환율(MWY)을 예측합니다.
+      </p>
+      <p class="text-sm opacity-90 mt-1">
+        Written by <a href="https://woojingo.notion.site" target="_blank" rel="noopener noreferrer" class="underline">Woojin Go</a>
+      </p>
+    </div>
+  </header>
+  <main class="max-w-4xl mx-auto p-4">
+    <!-- Tabs navigation -->
+    <div class="flex overflow-x-auto mb-4 border-b">
+      <button id="tab-input" class="tab-button active px-4 py-2 focus:outline-none">입력값</button>
+      <button id="tab-results" class="tab-button px-4 py-2 focus:outline-none">계산 결과</button>
+      <button id="tab-charts" class="tab-button px-4 py-2 focus:outline-none">그래프</button>
+      <button id="tab-param" class="tab-button px-4 py-2 focus:outline-none">파라메트릭 연구 (히트맵)</button>
+      <button id="tab-info" class="tab-button px-4 py-2 focus:outline-none">정보</button>
+      <button id="tab-saved" class="tab-button px-4 py-2 focus:outline-none">저장된 결과</button>
+    </div>
+    
+    <!-- Input section -->
+    <section id="section-input" class="glass-card p-6 mt-4">
+      <h2 class="text-2xl font-semibold mb-4">입력값</h2>
+      <!-- User guidance -->
+      <p class="text-gray-700 text-sm mb-4">
+        이 계산기는 HLS (Hu‑Lee‑Sum) 상관식을 기반으로 하이드레이트 형성 과정에서 염분 농도와
+        물 전환율이 어떻게 변화하는지 예측합니다. 기체와 염 종류, 초기 염도, 운전 압력,
+        과냉각도 범위를 입력하면 최대 달성 염도(MAS), 최대 물 전환율(MWY)과 함께
+        평형 곡선이 그려집니다.
+      </p>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Gas type -->
+        <div>
+          <label class="block font-medium mb-1" for="gas">기체 종류</label>
+          <select id="gas" class="w-full border rounded p-2">
+            <option value="CH4">CH₄</option>
+            <option value="C2H6">C₂H₆</option>
+            <option value="C3H8">C₃H₈</option>
+            <option value="CO2">CO₂</option>
+            <option value="CP">Cyclopentane (CP)</option>
+            <option value="Custom">Custom</option>
+          </select>
+        </div>
+        <!-- Custom gas input panel -->
+        <div id="customGasPanel" class="hidden grid grid-cols-1 md:grid-cols-3 gap-4 md:col-span-2">
+          <div>
+            <label class="block font-medium mb-1" for="customStructure">구조 (Structure)</label>
+            <select id="customStructure" class="w-full border rounded p-2">
+              <option value="sI">sI</option>
+              <option value="sII">sII</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-medium mb-1" for="customBetaX">nR/ΔH<sub>d</sub> (×10⁻³ 1/K)</label>
+            <input id="customBetaX" type="number" step="0.0001" value="-1.0000" class="w-full border rounded p-2" />
+          </div>
+          <div class="md:col-span-3">
+            <label class="block font-medium mb-1" for="customTPData">순수 평형 데이터 T[K],P[MPa] (한 줄에 하나)</label>
+            <textarea id="customTPData" rows="4" class="w-full border rounded p-2" placeholder="e.g.\n273.4,2.68\n274.6,3.05\n...\n"></textarea>
+            <p class="text-xs text-gray-600 mt-1">참고: 최소 2개 이상의 점이 필요합니다. sII 선택 시 α 보정(옵션)을 적용할 수 있습니다.</p>
+          </div>
+        </div>
+        <!-- Salt type -->
+        <div>
+          <label class="block font-medium mb-1" for="salt">염 종류</label>
+          <select id="salt" class="w-full border rounded p-2">
+            <option value="NaCl">NaCl</option>
+            <option value="KCl">KCl</option>
+            <option value="MgCl2">MgCl₂</option>
+          </select>
+        </div>
+        <!-- Initial salinity -->
+        <div>
+          <label class="block font-medium mb-1" for="salinity">
+            초기 염도 (wt%)
+          </label>
+          <input
+            id="salinity"
+            type="number"
+            step="0.1"
+            min="0"
+            max="30"
+            value="8"
+            class="w-full border rounded p-2"
+          />
+        </div>
+        <!-- Operating pressure -->
+        <div>
+          <label class="block font-medium mb-1" for="pressure">
+            운전 압력 (MPa)
+          </label>
+          <input
+            id="pressure"
+            type="number"
+            step="0.01"
+            min="0.1"
+            value="0.57"
+            class="w-full border rounded p-2"
+          />
+        </div>
+        <!-- Supercooling range -->
+        <div class="col-span-full">
+          <label class="block font-medium mb-1">과냉각도 범위 (K)</label>
+          <div class="flex space-x-2">
+            <input
+              id="dTmin"
+              type="number"
+              step="0.1"
+              min="0"
+              value="0.5"
+              class="w-1/2 border rounded p-2"
+            />
+            <input
+              id="dTmax"
+              type="number"
+              step="0.1"
+              min="0"
+              value="5"
+              class="w-1/2 border rounded p-2"
+            />
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-4">
+        <button
+          id="calculateBtn"
+          class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded btn btn-primary"
+        >
+          계산하기
+        </button>
+        <div class="flex gap-2">
+          <button id="resetBtn" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded btn">리셋</button>
+        </div>
+      </div>
+      <!-- Options -->
+      <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <label class="inline-flex items-center gap-2">
+          <input id="siiAlphaToggle" type="checkbox" class="form-checkbox" checked/>
+          <span>sII 보정(α=0.927) 적용</span>
+        </label>
+        <div>
+          <label class="block font-medium mb-1" for="t0FitMethodInput">T₀(P) 보간법</label>
+          <select id="t0FitMethodInput" class="w-full border rounded p-2">
+            <option value="poly" selected>3차 다항식 적합</option>
+            <option value="spline">단조 3차 스플라인(PCHIP)</option>
+          </select>
+        </div>
+      </div>
+    </section>
+    
+    <!-- Parametric Study section -->
+    <section id="section-param" class="glass-card p-6 mt-6 hidden">
+      <h2 class="text-2xl font-semibold mb-4">파라메트릭 연구 (히트맵)</h2>
+      <p class="text-gray-700 text-sm mb-2">
+        축: X = 초기 염도 (wt%), Y = 형성 온도 (K). 색상: MWY 또는 MAS. 동일 압력에서 HLS 상관식 기반 계산.
+      </p>
+      <ul class="text-gray-700 text-sm mb-4 list-disc pl-5">
+        <li><b>기체/염/압력</b>: 선택한 압력에서 순수 수계 평형온도 T₀(P)을 보간하여 기준을 잡습니다.</li>
+        <li><b>형성 온도 범위</b>: 각 온도(T)에 대해 dT = T₀ − T를 계산하여 형성 가능 영역을 평가합니다.</li>
+        <li><b>초기 염도 범위</b>: 각 초기 염도(S₀)에 대해 dT₍init₎(P,S₀)를 구하고, dT ≥ dT₍init₎이면 추가 농축이 가능(ΔMAS &gt; 0)합니다.</li>
+        <li><b>히트맵 색상(MAS)</b>: ΔMAS = (MAS − S₀)을 (100 − S₀)로 정규화한 값으로 칠합니다. ΔMAS=0은 형성 없음/경계입니다.</li>
+      </ul>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="block font-medium mb-1" for="t0FitMethod">T₀(P) 보간법</label>
+          <select id="t0FitMethod" class="w-full border rounded p-2">
+            <option value="poly" selected>3차 다항식 적합</option>
+            <option value="spline">단조 3차 스플라인(PCHIP)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block font-medium mb-1" for="paramGas">기체 종류</label>
+          <select id="paramGas" class="w-full border rounded p-2">
+            <option value="CH4">CH₄</option>
+            <option value="C2H6">C₂H₆</option>
+            <option value="C3H8">C₃H₈</option>
+            <option value="CO2">CO₂</option>
+            <option value="Custom">Custom</option>
+          </select>
+        </div>
+        <div>
+          <label class="block font-medium mb-1" for="paramSalt">염 종류</label>
+          <select id="paramSalt" class="w-full border rounded p-2">
+            <option value="NaCl">NaCl</option>
+            <option value="KCl">KCl</option>
+            <option value="MgCl2">MgCl₂</option>
+          </select>
+        </div>
+        <div>
+          <label class="block font-medium mb-1" for="paramPressure">압력 (MPa)</label>
+          <input id="paramPressure" type="number" step="0.01" min="0.01" value="0.57" class="w-full border rounded p-2" />
+        </div>
+        <div>
+          <label class="block font-medium mb-1" for="paramT0FitMethod">T₀(P) 보간법</label>
+          <select id="paramT0FitMethod" class="w-full border rounded p-2">
+            <option value="poly" selected>3차 다항식 적합</option>
+            <option value="spline">단조 3차 스플라인(PCHIP)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block font-medium mb-1" for="paramTMin">형성 온도 최소 (K)</label>
+          <input id="paramTMin" type="number" step="0.1" value="271" class="w-full border rounded p-2" />
+        </div>
+        <div>
+          <label class="block font-medium mb-1" for="paramTMax">형성 온도 최대 (K)</label>
+          <input id="paramTMax" type="number" step="0.1" value="285" class="w-full border rounded p-2" />
+        </div>
+        <div>
+          <label class="block font-medium mb-1" for="paramTStep">온도 간격 (K)</label>
+          <input id="paramTStep" type="number" step="0.1" value="0.3" class="w-full border rounded p-2" />
+        </div>
+        <div>
+          <label class="block font-medium mb-1" for="paramSMin">초기 염도 최소 (wt%)</label>
+          <input id="paramSMin" type="number" step="0.1" value="0" class="w-full border rounded p-2" />
+        </div>
+        <div>
+          <label class="block font-medium mb-1" for="paramSMax">초기 염도 최대 (wt%)</label>
+          <input id="paramSMax" type="number" step="0.1" value="15" class="w-full border rounded p-2" />
+        </div>
+        <div>
+          <label class="block font-medium mb-1" for="paramSStep">염도 간격 (wt%)</label>
+          <input id="paramSStep" type="number" step="0.1" value="0.3" class="w-full border rounded p-2" />
+        </div>
+        <div class="md:col-span-3">
+          <label class="inline-flex items-center gap-2">
+            <input id="paramSiiAlphaToggle" type="checkbox" class="form-checkbox" checked />
+            <span>sII 보정(α=0.927) 적용</span>
+          </label>
+        </div>
+        <!-- MAS heatmap rendering options -->
+        <div class="md:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block font-medium mb-1" for="paramMasMin">ΔMAS 색상 하한 (정규화 0–1)</label>
+            <input id="paramMasMin" type="number" min="0" max="1" step="0.01" value="0.05" class="w-full border rounded p-2" />
+            <p class="text-xs text-gray-600 mt-1">하한보다 작은 ΔMAS는 동일한 저채도 색으로 눌러 경계를 강조합니다.</p>
+          </div>
+          <div>
+            <label class="block font-medium mb-1" for="paramMasMax">ΔMAS 색상 상한 (정규화 0–1)</label>
+            <input id="paramMasMax" type="number" min="0" max="1" step="0.01" value="0.3" class="w-full border rounded p-2" />
+            <p class="text-xs text-gray-600 mt-1">상한 이상 ΔMAS는 동일한 고채도 색으로 포화시켜 미세 변화를 압축합니다.</p>
+          </div>
+          <div class="flex items-end">
+            <label class="inline-flex items-center gap-2">
+              <input id="paramMasHideZero" type="checkbox" class="form-checkbox" checked />
+              <span>ΔMAS=0(형성 없음) 영역 공백 처리</span>
+            </label>
+            
+          </div>
+        </div>
+      </div>
+      <div class="mt-4 flex gap-2">
+        <button id="generateHeatmapBtn" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded btn btn-primary">
+          히트맵 생성
+        </button>
+        <button id="resetHeatmapBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded btn">
+          리셋
+        </button>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+        <div>
+          <h3 class="text-lg font-semibold mb-2">MWY 히트맵</h3>
+          <div class="square-wrap">
+            <div class="square-inner">
+              <canvas id="heatmapMwy"></canvas>
+            </div>
+          </div>
+          <div class="mt-2 text-sm text-gray-600">색상: MWY (%)</div>
+          <div class="mt-1">
+            <canvas id="legendMwy" class="w-full" height="36"></canvas>
+          </div>
+        </div>
+        <div>
+          <h3 class="text-lg font-semibold mb-2">MAS 히트맵</h3>
+          <div class="square-wrap">
+            <div class="square-inner">
+              <canvas id="heatmapMas"></canvas>
+            </div>
+          </div>
+          <div class="mt-2 text-sm text-gray-600">색상: ΔMAS 정규화 (0–1)</div>
+          <div class="mt-1">
+            <canvas id="legendMas" class="w-full" height="36"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+    <!-- Results summary card -->
+    <section id="section-results" class="glass-card p-6 mt-6 hidden">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-2xl font-semibold">
+          계산 결과 (최대 과냉각도 기준)
+        </h2>
+        <div class="flex gap-2">
+          <button id="saveResultBtn" class="bg-blue-600 hover:bg-blue-700 text-white text-sm py-1 px-3 rounded btn btn-primary">
+            결과 저장
+          </button>
+          <div class="relative">
+            <button id="exportBtn" class="bg-green-600 hover:bg-green-700 text-white text-sm py-1 px-3 rounded btn btn-secondary">
+              내보내기
+            </button>
+            <div id="exportMenu" class="absolute right-0 mt-1 hidden bg-white border rounded shadow-md z-10">
+              <button id="exportCsvBtn" class="block w-full text-left px-4 py-2 hover:bg-gray-100">CSV 다운로드</button>
+              <button id="exportJsonBtn" class="block w-full text-left px-4 py-2 hover:bg-gray-100">JSON 다운로드</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div class="bg-gray-100 p-4 rounded">
+          <p class="text-sm text-gray-600">최대 달성 염도 (MAS)</p>
+          <p
+            id="masValue"
+            class="text-3xl font-bold mt-1 truncate"
+          ></p>
+        </div>
+        <div class="bg-gray-100 p-4 rounded">
+          <p class="text-sm text-gray-600">최대 물 전환율 (MWY)</p>
+          <p
+            id="mwyValue"
+            class="text-3xl font-bold mt-1 truncate"
+          ></p>
+        </div>
+      </div>
+      <!-- Operating pressure KPIs -->
+      <div class="mt-6">
+        <h3 class="text-xl font-semibold mb-2">운전 압력에서의 지표 (P<sub>op</sub>)</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="bg-gray-50 p-3 rounded border">
+            <p class="text-xs text-gray-500">T<sub>pure</sub>(P<sub>op</sub>)</p>
+            <p id="tPureVal" class="text-xl font-semibold">–</p>
+          </div>
+          <div class="bg-gray-50 p-3 rounded border">
+            <p class="text-xs text-gray-500">T<sub>init</sub>(P<sub>op</sub>)</p>
+            <p id="tInitVal" class="text-xl font-semibold">–</p>
+          </div>
+          <div class="bg-gray-50 p-3 rounded border">
+            <p class="text-xs text-gray-500">T<sub>MAS</sub>(P<sub>op</sub>)</p>
+            <p id="tMasVal" class="text-xl font-semibold">–</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+          <div class="bg-gray-50 p-3 rounded border">
+            <p class="text-xs text-gray-500">ΔT<sub>init</sub> (K)</p>
+            <p id="dtInitVal" class="text-xl font-semibold">–</p>
+          </div>
+          <div class="bg-gray-50 p-3 rounded border">
+            <p class="text-xs text-gray-500">ΔT<sub>extra</sub> (입력)</p>
+            <p id="dtExtraVal" class="text-xl font-semibold">–</p>
+          </div>
+          <div class="bg-gray-50 p-3 rounded border">
+            <p class="text-xs text-gray-500">ΔT<sub>total</sub> = ΔT<sub>init</sub> + ΔT<sub>extra</sub></p>
+            <p id="dtTotalVal" class="text-xl font-semibold">–</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Gas constants used (β info) -->
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mt-3">
+        <div class="bg-gray-50 p-3 rounded border">
+          <p class="text-xs text-gray-500">기체</p>
+          <p id="gasInfoGas" class="text-sm font-semibold">–</p>
+        </div>
+        <div class="bg-gray-50 p-3 rounded border">
+          <p class="text-xs text-gray-500">구조</p>
+          <p id="gasInfoStruct" class="text-sm font-semibold">–</p>
+        </div>
+        <div class="bg-gray-50 p-3 rounded border">
+          <p class="text-xs text-gray-500" title="betaX 단위: ×10⁻³ 1/K (제공값)">nR/ΔH<sub>d</sub> (제공값)</p>
+          <p id="gasInfoNRDiv" class="text-sm font-semibold">–</p>
+        </div>
+        <div class="bg-gray-50 p-3 rounded border">
+          <p class="text-xs text-gray-500">α<sub>sII</sub> 적용</p>
+          <p id="gasInfoAlpha" class="text-sm font-semibold">–</p>
+        </div>
+        <div class="bg-gray-50 p-3 rounded border">
+          <p class="text-xs text-gray-500" title="β_eff = (nR/ΔH<sub>d</sub>) × 10⁻³ × α<sub>sII</sub>">β<sub>eff</sub> (1/K)</p>
+          <p id="gasInfoBetaEff" class="text-sm font-semibold">–</p>
+        </div>
+      </div>
+
+      <!-- Detailed parameters -->
+      <div class="mt-6">
+        <h3 class="text-xl font-semibold mb-2">상세 계산 매개변수</h3>
+        <div class="overflow-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-100">
+              <tr>
+                <th class="p-2 border">과냉각도 (K)</th>
+                <th class="p-2 border">이온농도 (mol %)</th>
+                <th class="p-2 border">X<sub><span id="xHeader">NaCl</span></sub></th>
+                <th class="p-2 border">ln(a<sub>w</sub>)</th>
+                <th class="p-2 border">dT/T<sub>0</sub>T</th>
+                <th class="p-2 border">T<sub>HLS</sub> (K)</th>
+                <th class="p-2 border">T<sub>Max</sub> (K)</th>
+                <th class="p-2 border"><span id="saltMassHeader">NaCl (g)</span></th>
+                <th class="p-2 border">초기 물량 (g)</th>
+                <th class="p-2 border">최종 염도 (wt%)</th>
+                <th class="p-2 border">용액 내 물 (g)</th>
+                <th class="p-2 border">하이드레이트 내 물 (g)</th>
+                <th class="p-2 border">최대 물 전환율 (%)</th>
+              </tr>
+            </thead>
+            <tbody id="detailedResultsTable">
+              <!-- JS will populate this -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+        </div>
+      </div>
+    </section>
+    
+    <!-- Charts section -->
+    <section id="section-charts" class="mt-6 hidden">
+      <!-- Equilibrium curve chart -->
+      <div class="glass-card p-6 mb-6">
+        <h2 class="text-xl font-semibold mb-2">
+          하이드레이트 평형 곡선 (H‑Lw‑V)
+        </h2>
+        <div class="square-wrap">
+          <div class="square-inner">
+            <canvas id="curveChart"></canvas>
+          </div>
+        </div>
+      </div>
+      <!-- MWY vs supercooling chart -->
+      <div class="glass-card p-6">
+        <h2 class="text-xl font-semibold mb-2">
+          과냉각도에 따른 최대 물 전환율
+        </h2>
+        <div class="square-wrap">
+          <div class="square-inner">
+            <canvas id="mwyChart"></canvas>
+          </div>
+        </div>
+      </div>
+      <!-- CP 전용: T vs NaCl 비교 차트 (CP 선택 시 표시) -->
+      <div id="cpTsCard" class="glass-card p-6 mt-6 hidden">
+        <h2 class="text-xl font-semibold mb-2">
+          CP 평형: 온도(K) vs NaCl (wt%) — 실험 vs 예측
+        </h2>
+        <div class="square-wrap">
+          <div class="square-inner">
+            <canvas id="cpTsChart"></canvas>
+          </div>
+        </div>
+        <p class="text-xs text-gray-600 mt-2">CP는 대기압(≈0.1 MPa)에서만 고려합니다. 입력 압력은 자동으로 0.1 MPa로 고정됩니다.</p>
+      </div>
+    </section>
+    
+    <!-- Info section -->
+    <section id="section-info" class="glass-card p-6 mt-6 hidden">
+      <h2 class="text-2xl font-semibold mb-4">HLS 상관식 정보</h2>
+      <div class="prose max-w-none">
+        <h3 class="text-xl font-semibold mt-4">배경 원리</h3>
+        <ol class="list-decimal pl-6">
+          <li>밀폐계에서 가스 하이드레이트가 형성될 때, 순수한 물만 반응에 참여하여 잔류 용액의 염 농도가 자연적으로 증가합니다.</li>
+          <li>염 농도가 증가하면 하이드레이트 상평형 곡선이 저온/고압 조건(왼쪽)으로 이동합니다.</li>
+          <li>주어진 운전 조건(온도, 압력)이 이동된 상평형 곡선과 만나는 지점이 열역학적으로 염이 최대로 농축될 수 있는 상태(MAS)입니다.</li>
+          <li>초기 염 농도와 계산된 MAS를 이용하여 물질수지(mass balance)를 통해 물이 하이드레이트로 전환된 비율(MWY)을 계산할 수 있습니다.</li>
+        </ol>
+
+        <h3 class="text-xl font-semibold mt-6">핵심 계산식 (HLS Correlation)</h3>
+        <div class="bg-gray-100 p-4 rounded text-sm">
+          <p class="font-mono">ΔT/(T₀·T) = −(nR/ΔH<sub>d</sub>) · ln(a<sub>w</sub>)</p>
+          <p class="mt-1">Salts 계: ln(a<sub>w</sub>) = B₁X + B₂X² + B₃X³ (Table 2, ‘Salts’ 평균).</p>
+        </div>
+        <ul class="list-disc pl-6 mt-2">
+          <li>ΔT: 과냉각도 (K), T₀: 순수 평형 온도, T: 염 존재 시 평형 온도</li>
+          <li>nR/ΔH<sub>d</sub>: 기체별 평균(Table S15, Avg.)</li>
+          <li>B 계수: B₁ = −1.06152, B₂ = 3.25726, B₃ = −37.2263</li>
+        </ul>
+
+        <h3 class="text-xl font-semibold mt-6">최대 물 전환율 (MWY) 계산</h3>
+        <div class="bg-gray-100 p-4 rounded">
+          <p class="font-mono">MWY (%) = (MAS - 초기 염도) / MAS × 100</p>
+        </div>
+        <p class="text-sm text-gray-600 mt-2">데이터 업데이트: CH₄/CO₂/C₂H₆ 상평형 및 nR/ΔH<sub>d</sub>(Avg.), ‘Salts’ B 계수 반영. CP(구조 II)는 대기압 실험 T–S와 예측 비교를 제공합니다.</p>
+      </div>
+    </section>
+    
+    <!-- Saved Results section -->
+    <section id="section-saved" class="glass-card p-6 mt-6 hidden">
+      <h2 class="text-2xl font-semibold mb-4">저장된 결과</h2>
+      <div id="savedResultsContainer" class="space-y-4">
+        <p id="noSavedResults" class="text-gray-500 italic">저장된 결과가 없습니다.</p>
+      </div>
+    </section>
+  </main>
+  <!-- Application logic -->
+  <!-- Do not use type="module" for local file origins to avoid CORS limitations -->
+  <!-- Chart.js matrix plugin for heatmaps -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@2.0.1/dist/chartjs-chart-matrix.min.js" defer></script>
+  <!-- Footer: Buy Me A Coffee -->
+  <footer class="mt-10 py-6 text-center text-sm text-gray-500 flex justify-center">
+    <a href="https://www.buymeacoffee.com/woojingo" target="_blank" rel="noopener noreferrer">
+      <img src="https://cdn.buymeacoffee.com/buttons/v2/default-red.png" alt="Buy Me A Coffee" style="height: 40px !important;width: 145px !important;">
+    </a>
+  </footer>
+
+  <!-- Keyboard Shortcuts Modal -->
+  <div id="shortcutModal" class="fixed inset-0 hidden z-50 flex items-center justify-center">
+    <div class="glass-modal rounded-lg w-11/12 max-w-lg p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-semibold">키보드 단축키</h3>
+        <button id="shortcutCloseBtn" class="text-gray-900 hover:text-black bg-transparent rounded px-2 py-1">✕</button>
+      </div>
+      <ul class="text-sm space-y-1">
+        <li><b>Ctrl/Cmd + /</b>: 이 도움말 열기</li>
+        <li><b>Ctrl/Cmd + Enter</b>: 계산하기</li>
+        <li><b>Ctrl/Cmd + 1..6</b>: 탭 전환 (입력, 결과, 그래프, 히트맵, 정보, 저장)</li>
+        <li><b>Ctrl/Cmd + R</b>: 리셋</li>
+        <li><b>Ctrl/Cmd + E</b>: 내보내기 메뉴 토글</li>
+        <li><b>Ctrl/Cmd + S</b>: 결과 저장</li>
+        <li><b>Ctrl/Cmd + H</b>: 히트맵 생성</li>
+        <li><b>Esc</b>: 이 창 닫기</li>
+      </ul>
+    </div>
+  </div>
+  <!-- Floating hint button -->
+  <button
+    id="shortcutHintBtn"
+    title="키보드 단축키 보기 (Ctrl/Cmd + /)"
+    class="fixed bottom-4 right-4 rounded-full px-4 py-2 bg-white bg-opacity-80 hover:bg-opacity-100 text-gray-800 shadow-lg backdrop-filter backdrop-blur z-40"
+    aria-label="Open keyboard shortcuts"
+  >⌨︎ 단축키</button>
+  
+  <!-- App script at the very end to ensure all elements exist -->
+  <script src="./app.js"></script>
+</body>
+</html>
