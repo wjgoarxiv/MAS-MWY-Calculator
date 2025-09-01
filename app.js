@@ -247,6 +247,41 @@ tabSaved.addEventListener('click', () => switchTab('saved'));
 // Initialize with input tab active
 switchTab('input');
 
+// Haptic feedback on button press (progressive enhancement for mobile)
+// Uses the Vibration API when available (commonly Android Chrome). iOS Safari
+// does not currently support navigator.vibrate, so this is a safe no‑op there.
+(() => {
+  const canVibrate = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
+  const isMobileLike = (() => {
+    try {
+      return (
+        (typeof window !== 'undefined' && (
+          (window.matchMedia && (window.matchMedia('(any-pointer: coarse)').matches || window.matchMedia('(pointer: coarse)').matches)) ||
+          ('ontouchstart' in window) ||
+          (navigator && (navigator.maxTouchPoints || navigator.msMaxTouchPoints))
+        ))
+      );
+    } catch (_) { return false; }
+  })();
+  if (!canVibrate || !isMobileLike) return;
+  const recent = new WeakMap();
+  const pulse = (el) => {
+    const now = Date.now();
+    const last = recent.get(el) || 0;
+    if (now - last < 120) return; // throttle per element
+    recent.set(el, now);
+    try { navigator.vibrate(12); } catch (_) { /* ignore */ }
+  };
+  const selector = 'button, .btn, [role="button"], input[type="button"], input[type="submit"], input[type="reset"]';
+  const onPointerDown = (e) => {
+    const target = e.target && (e.target.closest ? e.target.closest(selector) : null);
+    if (!target) return;
+    pulse(target);
+  };
+  // Capture early to feel immediate on press
+  window.addEventListener('pointerdown', onPointerDown, { capture: true, passive: true });
+})();
+
 // CP gas: fix pressure input to ~0.1 MPa and disable when selected
 function median(arr) {
   const a = arr.slice().sort((x,y)=>x-y);
